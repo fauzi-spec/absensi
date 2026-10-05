@@ -1,0 +1,27 @@
+'use client';
+import { FormEvent, useEffect, useState } from 'react';
+import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import type { Kelas, Siswa } from '@/lib/types';
+
+export function KelasManager() {
+  const [kelas, setKelas] = useState<Kelas[]>([]); const [siswa, setSiswa] = useState<Siswa[]>([]); const [selected, setSelected] = useState('');
+  const [name, setName] = useState(''); const [tingkat, setTingkat] = useState(''); const [student, setStudent] = useState(''); const [nis, setNis] = useState('');
+  const [message, setMessage] = useState(''); const [savingStudent, setSavingStudent] = useState(false);
+  const load = async () => { const { data } = await supabase.from('kelas').select('*').order('nama'); setKelas(data ?? []); if (selected) { const { data: ss } = await supabase.from('siswa').select('*').eq('kelas_id', selected).order('nama'); setSiswa(ss ?? []); } };
+  useEffect(() => { load(); }, [selected]);
+  const addKelas = async (e: FormEvent) => { e.preventDefault(); if (!name) return; await supabase.from('kelas').insert({ nama: name, tingkat: tingkat || null }); setName(''); setTingkat(''); load(); };
+  const addSiswa = async (e: FormEvent) => {
+    e.preventDefault(); setMessage('');
+    if (!selected) { setMessage('Pilih kelas terlebih dahulu.'); return; }
+    if (!student.trim()) { setMessage('Nama siswa wajib diisi.'); return; }
+    setSavingStudent(true);
+    const { error } = await supabase.from('siswa').insert({ kelas_id: selected, nama: student.trim(), nis: nis.trim() || null });
+    setSavingStudent(false);
+    if (error) { setMessage(`Gagal menambah siswa: ${error.message}`); return; }
+    setStudent(''); setNis(''); setMessage('Siswa berhasil ditambahkan.'); await load();
+  };
+  const remove = async (table: 'kelas' | 'siswa', id: string) => { if (!confirm('Hapus data ini?')) return; await supabase.from(table).delete().eq('id', id); if (id === selected) setSelected(''); load(); };
+  const edit = async (table: 'kelas' | 'siswa', item: Kelas | Siswa) => { const nama = prompt(table === 'kelas' ? 'Nama kelas' : 'Nama siswa', item.nama); if (!nama) return; const extra = prompt(table === 'kelas' ? 'Tingkat (boleh kosong)' : 'NIS (boleh kosong)', table === 'kelas' ? (item as Kelas).tingkat ?? '' : (item as Siswa).nis ?? '') ?? ''; await supabase.from(table).update(table === 'kelas' ? { nama, tingkat: extra || null } : { nama, nis: extra || null }).eq('id', item.id); load(); };
+  return <div className="grid gap-6 lg:grid-cols-2"><section className="card p-5"><h2 className="font-bold">Daftar Kelas</h2><form onSubmit={addKelas} className="mt-4 grid gap-3 sm:grid-cols-3"><input required className="input" placeholder="Nama kelas (VII A)" value={name} onChange={e => setName(e.target.value)} /><input className="input" placeholder="Tingkat" value={tingkat} onChange={e => setTingkat(e.target.value)} /><button className="btn-primary"><Plus size={17} />Tambah</button></form><div className="mt-5 space-y-2">{kelas.map(k => <button type="button" onClick={() => { setSelected(k.id); setMessage(''); }} key={k.id} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${selected === k.id ? 'border-brand-500 bg-brand-50' : 'hover:bg-slate-50'}`}><span><b>{k.nama}</b>{k.tingkat && <small className="ml-2 text-slate-500">Tingkat {k.tingkat}</small>}</span><span className="flex gap-1"><span onClick={e => { e.stopPropagation(); edit('kelas', k); }} className="rounded p-1 text-slate-400 hover:text-brand-700"><Pencil size={17} /></span><span onClick={e => { e.stopPropagation(); remove('kelas', k.id); }} className="rounded p-1 text-slate-400 hover:text-red-600"><Trash2 size={17} /></span></span></button>)}{!kelas.length && <p className="py-6 text-center text-sm text-slate-400">Tambahkan kelas terlebih dahulu.</p>}</div></section><section className="card p-5"><h2 className="font-bold">Siswa {selected && `— ${kelas.find(k => k.id === selected)?.nama}`}</h2>{selected ? <><p className="mt-1 text-sm text-slate-500">Masukkan data siswa untuk kelas yang dipilih.</p><form onSubmit={addSiswa} className="mt-4 grid gap-3 sm:grid-cols-3"><input required className="input" placeholder="Nama siswa" value={student} onChange={e => setStudent(e.target.value)} /><input className="input" placeholder="NIS (opsional)" value={nis} onChange={e => setNis(e.target.value)} /><button disabled={savingStudent} className="btn-primary"><UserPlus size={17} />{savingStudent ? 'Menyimpan...' : 'Tambah siswa'}</button></form>{message && <p className={`mt-3 text-sm ${message.startsWith('Gagal') ? 'text-red-600' : 'text-emerald-600'}`}>{message}</p>}<div className="mt-5 divide-y">{siswa.map((s, i) => <div className="flex items-center justify-between py-3" key={s.id}><span><span className="mr-3 text-sm text-slate-400">{i + 1}</span><b>{s.nama}</b>{s.nis && <small className="ml-2 text-slate-500">{s.nis}</small>}</span><span className="flex gap-2"><button onClick={() => edit('siswa', s)} className="text-slate-400 hover:text-brand-700"><Pencil size={17} /></button><button onClick={() => remove('siswa', s.id)} className="text-slate-400 hover:text-red-600"><Trash2 size={17} /></button></span></div>)}{!siswa.length && <p className="py-6 text-center text-sm text-slate-400">Belum ada siswa dalam kelas ini.</p>}</div></> : <p className="py-12 text-center text-sm text-slate-400">Pilih kelas terlebih dahulu, kemudian form tambah siswa akan tampil di sini.</p>}</section></div>;
+}
